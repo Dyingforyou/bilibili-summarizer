@@ -36,6 +36,38 @@ https://www.bilibili.com/video/BV1aqh36vEnK/?p=2
 
 程序会使用P2对应的 `cid` 获取字幕或下载音频；同一BV号的不同分P会作为不同任务处理。
 
+## 本机大视频文件
+
+先在这台机器上安装并启动本地服务（无需 sudo）：
+
+```bash
+cd /home/admin/bilibili-summarizer
+bash deploy/setup-local.sh
+```
+
+打开 `http://127.0.0.1:8002/`。服务只监听本机回环地址，不通过云服务器。脚本会创建 `.env`，请在其中填写 `ASR_API_KEY` 和 `LLM_API_KEY`，然后运行 `systemctl --user restart bilibili-summarizer.service`。无须在系统中安装 ffmpeg；本地依赖会提供它。
+
+如果视频已经是本机文件，在持有文件的机器上运行命令行导入，不要通过网页上传 3GB 文件。要在本地网页的历史记录中查看结果，添加 `--publish-to-history`：
+
+```bash
+cd /home/admin/bilibili-summarizer
+. venv/bin/activate
+python import_local.py "/视频所在目录/视频.mp4"
+python import_local.py --publish-to-history "/视频所在目录/视频.mp4"
+```
+
+长视频建议在后台运行，这样关闭终端后任务仍会继续：
+
+```bash
+bash deploy/import-local-background.sh "/视频所在目录/视频.mp4"
+```
+
+脚本会显示任务名。用 `journalctl --user -u <任务名> -f` 查看日志，完成后在本地页面点击“刷新历史记录”。
+
+程序从原视频直接提取约 10 分钟一个的低码率音频片段，逐段转写后对长转录稿分段总结。源视频不会复制进项目目录，也不会在数据库中保存其绝对路径。如果只想生成本机私有文件，运行第一条前台命令；要在本地网页历史记录中查看，运行第二条前台命令或后台脚本。请只运行一种。前台命令需保持终端运行，后台命令则无需保持终端。处理时间和 ASR 费用主要取决于**视频时长**，而非 3GB 文件大小。原视频仍留在本机，但音频分片会发送给 ASR 服务，转录文字会发送给 LLM 服务。
+
+若视频实际是 B 站链接，先直接提交链接：有字幕时无需下载视频或 ASR；无字幕时会下载音频再转写。微信视频号链接仍走现有链接流程。
+
 ## 总结溯源
 
 新生成的总结会在正文段落后显示“原文 Sxxxx”按钮。点击可查看该结论所依据的

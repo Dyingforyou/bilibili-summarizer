@@ -84,6 +84,21 @@ FINAL_PROMPT = """你是资深中文内容编辑。请根据“视频转录稿�
 使用 Markdown 输出，不要输出分析过程或 JSON。
 """
 
+LONG_MAP_PROMPT = """你负责整理长视频的其中一段转录稿。按顺序提取本段的主题、论点、依据、数据、例子、限制和重要原话。每个事实或观点都标注原文编号，格式【原文:S0001】。只引用输入中真实存在的编号；不要补充外部知识。尽量保留不同话题及关键数字，不要直接写整部视频的最终总结。输出结构清晰的中文笔记。"""
+
+LONG_REDUCE_PROMPT = """将以下连续几段视频笔记压缩为一份可用于最终总结的证据笔记。保留每段独有的主题、具体数字、条件、反例和原文编号；只合并重复内容。每条事实或观点继续带原有【原文:S0001】格式引用，不得发明或改写编号，不得加入外部信息。"""
+
+LONG_FINAL_PROMPT = FINAL_PROMPT.replace(
+    "请根据“视频转录稿”和“证据化分析”写一份",
+    "请根据覆盖完整视频的分段证据笔记写一份",
+).replace(
+    "证据化分析若与转录稿冲突，以转录稿为准。",
+    "证据笔记有疑义时写明不确定，不自行补全。",
+).replace(
+    "转录稿已被切成 [S0001] 形式的证据片段。",
+    "证据笔记保留了 [S0001] 形式的原文编号。",
+)
+
 
 def _chat(messages: list[dict], max_tokens: int, temperature: float = 0.2) -> str:
     if not LLM_API_KEY:
@@ -126,13 +141,57 @@ def _clean_json_block(value: str) -> str:
     return value.strip()
 
 
+def _group_by_size(items: list[str], max_chars: int) -> list[list[str]]:
+    """保持时间顺序，将证据片段或笔记装入有限大小的请求。"""
+    groups = []
+    current = []
+    current_size = 0
+    for item in items:
+        if current and current_size + len(item) + 2 > max_chars:
+            groups.append(current)
+            current = []
+            current_size = 0
+        current.append(item)
+        current_size += len(item) + 2
+    if current:
+        groups.append(current)
+    return groups
+
+
+def _summarize_long(chunks: list[dict], title: str) -> str:
+    source_items = [f"[{item['id']}] {item['text']}" for item in chunks]
+    notes = []
+    for group in _group_by_size(source_items, 14000):
+        notes.append(_chat([
+            {"role": "system", "content": LONG_MAP_PROMPT},
+            {"role": "user", "content": "\n\n".join(group)},
+        ], max_tokens=3000, temperature=0.1))
+
+    # 特别长的视频会产生大量分段笔记；逐层压缩以控制最终请求大小。
+    while sum(map(len, notes)) > 24000:
+        new_notes = []
+        for group in _group_by_size(notes, 16000):
+            new_notes.append(_chat([
+                {"role": "system", "content": LONG_REDUCE_PROMPT},
+                {"role": "user", "content": "\n\n".join(group)},
+            ], max_tokens=3000, temperature=0.1))
+        if sum(map(len, new_notes)) >= sum(map(len, notes)):
+            raise RuntimeError("长视频笔记无法压缩到模型输入范围，请更换更大上下文的模型")
+        notes = new_notes
+
+    return _chat([
+        {"role": "system", "content": LONG_FINAL_PROMPT},
+        {"role": "user", "content": f"视频标题：{title or '未提供'}\n\n按时间顺序的分段证据笔记：\n" + "\n\n".join(notes)},
+    ], max_tokens=7000, temperature=0.2)
+
+
 def summarize_text(transcript: str, title: str = "") -> tuple[str, str]:
     """先提取证据化提纲，再生成类型自适应的完整总结。"""
-    max_chars = 120000
-    if len(transcript) > max_chars:
-        transcript = transcript[:max_chars] + "\n\n[转录稿超过处理上限，后续内容未包含]"
-
     chunks = build_source_chunks(transcript)
+    if len(transcript) > 24000:
+        summary = _summarize_long(chunks, title)
+        return summary, extract_provenance(summary, chunks)
+
     chunked_transcript = format_chunked_source(chunks)
     source = f"视频标题：{title or '未提供'}\n\n视频转录稿：\n{chunked_transcript}"
     analysis_raw = _chat([

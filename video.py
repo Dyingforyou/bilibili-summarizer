@@ -527,54 +527,72 @@ def _refresh_cookies(path: str):
 
 
 def get_audio_duration(audio_path: str) -> float:
-    """用ffprobe获取音频时长（秒）"""
-    cmd = [
-        "ffprobe", "-v", "quiet",
-        "-show_entries", "format=duration",
-        "-of", "csv=p=0",
-        audio_path
-    ]
-    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-    if result.returncode != 0:
-        return 0.0
-    try:
-        return float(result.stdout.strip())
-    except ValueError:
-        return 0.0
+    """读取音频时长；本地无 ffprobe 时使用 ffmpeg 元数据。"""
+    if shutil.which("ffprobe"):
+        cmd = ["ffprobe", "-v", "quiet", "-show_entries", "format=duration",
+               "-of", "csv=p=0", audio_path]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        if result.returncode == 0:
+            try:
+                return float(result.stdout.strip())
+            except ValueError:
+                pass
+    if shutil.which("ffmpeg"):
+        result = subprocess.run(["ffmpeg", "-hide_banner", "-i", audio_path],
+                                capture_output=True, text=True, timeout=30)
+        match = re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", result.stderr)
+        if match:
+            hours, minutes, seconds = match.groups()
+            return int(hours) * 3600 + int(minutes) * 60 + float(seconds)
+    return 0.0
 
 
 def split_audio(audio_path: str, chunk_minutes: int = 10) -> list:
     """将长音频切分为多个分片"""
     duration = get_audio_duration(audio_path)
     chunk_seconds = chunk_minutes * 60
-
-    if duration <= chunk_seconds:
+    if duration > 0 and duration <= chunk_seconds:
         return [audio_path]
 
-    chunks = []
     base_name = os.path.splitext(os.path.basename(audio_path))[0]
-    chunk_dir = os.path.join(AUDIO_DIR, f"{base_name}_chunks")
+    return _segment_audio(audio_path, base_name, chunk_minutes)
+
+
+def _segment_audio(source_path: str, task_id: str, chunk_minutes: int) -> list[str]:
+    """单次顺序读取输入，转码并切片。"""
+    if chunk_minutes <= 0:
+        raise ValueError("分段时长必须大于 0")
+
+    chunk_dir = os.path.join(AUDIO_DIR, f"{task_id}_chunks")
     os.makedirs(chunk_dir, exist_ok=True)
-
-    i = 0
-    start = 0
-    while start < duration:
-        chunk_path = os.path.join(chunk_dir, f"chunk_{i:03d}.mp3")
-        cmd = [
-            "ffmpeg", "-y",
-            "-i", audio_path,
-            "-ss", str(start),
-            "-t", str(chunk_seconds),
-            "-acodec", "libmp3lame", "-b:a", "64k",
-            chunk_path
-        ]
-        subprocess.run(cmd, capture_output=True, timeout=120)
-        if os.path.exists(chunk_path):
-            chunks.append(chunk_path)
-        start += chunk_seconds
-        i += 1
-
+    output_pattern = os.path.join(chunk_dir, "chunk_%04d.mp3")
+    cmd = [
+        "ffmpeg", "-hide_banner", "-loglevel", "error", "-y", "-i", source_path,
+        "-map", "0:a:0", "-vn", "-ac", "1", "-ar", "16000",
+        "-c:a", "libmp3lame", "-b:a", "64k",
+        "-f", "segment", "-segment_time", str(chunk_minutes * 60),
+        "-reset_timestamps", "1", output_pattern,
+    ]
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    except FileNotFoundError as exc:
+        raise RuntimeError("未安装 ffmpeg，请先安装 ffmpeg 和 ffprobe") from exc
+    if result.returncode != 0:
+        raise RuntimeError(f"音频提取失败: {result.stderr[-500:]}")
+    chunks = sorted(
+        os.path.join(chunk_dir, name) for name in os.listdir(chunk_dir)
+        if name.startswith("chunk_") and name.endswith(".mp3")
+    )
+    if not chunks or any(os.path.getsize(path) == 0 for path in chunks):
+        raise RuntimeError("视频没有可转写的音轨")
     return chunks
+
+
+def split_local_video(video_path: str, task_id: str, chunk_minutes: int = 10) -> list[str]:
+    """直接从本地视频抽取分段音频，避免复制整个大视频或生成整段 MP3。"""
+    if not os.path.isfile(video_path):
+        raise FileNotFoundError(f"视频文件不存在: {video_path}")
+    return _segment_audio(video_path, task_id, chunk_minutes)
 
 
 def cleanup_audio(task_id: str):

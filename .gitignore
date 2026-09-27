@@ -12,6 +12,12 @@ data/
 *.db
 *.sqlite*
 *.mp3
+*.mp4
+*.flv
+*.mkv
+*.mov
+*.avi
+*.webm
 *cookies*.txt
 yuanbaocookie.txt
 *.log

@@ -1,0 +1,16 @@
+[Unit]
+Description=视频总结助手（本机）
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/home/admin/bilibili-summarizer
+Environment=PATH=/home/admin/bilibili-summarizer/venv/bin:/usr/local/bin:/usr/bin
+ExecStart=/home/admin/bilibili-summarizer/venv/bin/python -m uvicorn server:app --host 127.0.0.1 --port 8002
+Restart=on-failure
+RestartSec=3
+UMask=0077
+
+[Install]
+WantedBy=default.target

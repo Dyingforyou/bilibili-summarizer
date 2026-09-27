@@ -17,7 +17,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from config import DATA_DIR
 from db import init_db, create_task, update_task, get_task, list_tasks, delete_task
 from video import (extract_bvid, extract_page_number, get_video_info, get_subtitles, download_audio,
-                   split_audio, cleanup_audio, detect_platform,
+                   split_audio, split_local_video, get_audio_duration, cleanup_audio, detect_platform,
                    get_wechat_video_info, download_wechat_audio)
 from asr import transcribe_chunks
 from llm import summarize_text
@@ -95,6 +95,30 @@ def process_video_task(task_id: str, url: str):
             cleanup_audio(task_id)
         except Exception:
             pass
+
+
+def process_local_video_task(task_id: str, video_path: str):
+    """在本机前台处理文件；数据库和页面都不保存源文件路径。"""
+    try:
+        update_task(task_id, status="fetching_info")
+        duration = get_audio_duration(video_path)
+        update_task(task_id, title=os.path.basename(video_path), duration=int(duration))
+        update_task(task_id, status="splitting")
+        chunks = split_local_video(video_path, task_id)
+        update_task(task_id, status="transcribing")
+        transcript = transcribe_chunks(chunks)
+        if not transcript:
+            raise RuntimeError("语音识别没有返回文字，请检查视频音轨")
+        update_task(task_id, transcript=transcript, transcript_source="asr")
+        update_task(task_id, status="summarizing")
+        summary, summary_provenance = summarize_text(transcript, title=os.path.basename(video_path))
+        update_task(task_id, summary=summary, summary_provenance=summary_provenance,
+                    status="completed")
+    except Exception as exc:
+        traceback.print_exc()
+        update_task(task_id, status="failed", error_message=str(exc))
+    finally:
+        cleanup_audio(task_id)
 
 
 def regenerate_summary_task(task_id: str):

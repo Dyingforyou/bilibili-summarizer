@@ -1,0 +1,22 @@
+[Unit]
+Description=视频总结助手到 ECS 的本地回环反向隧道
+After=network-online.target bilibili-summarizer.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/ssh -NT \
+    -i /home/admin/.ssh/id_ed25519_aliyun \
+    -o BatchMode=yes \
+    -o IdentitiesOnly=yes \
+    -o ExitOnForwardFailure=yes \
+    -o ServerAliveInterval=15 \
+    -o ServerAliveCountMax=3 \
+    -o ConnectTimeout=10 \
+    -R 127.0.0.1:28002:127.0.0.1:8002 \
+    admin@47.103.65.182
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

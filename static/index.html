@@ -93,6 +93,18 @@ body {
   margin-bottom: 16px;
   color: var(--text-muted);
 }
+#localImportHelp p { font-size: 14px; color: var(--text-muted); margin-bottom: 14px; }
+#localImportHelp pre {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  font-size: 13px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .url-textarea {
   width: 100%;
   min-height: 100px;
@@ -431,6 +443,14 @@ https://weixin.qq.com/sph/xxxxxxxx" rows="4"></textarea>
     <div id="toast" class="toast"></div>
   </div>
 
+  <div class="input-section" id="localImportHelp" style="display:none;">
+    <h2>本机大视频</h2>
+    <p>视频文件已经在这台机器上时，请在终端运行下面的命令。处理完成后点击“刷新历史记录”；原视频无需经过浏览器上传。</p>
+    <pre>cd /home/admin/bilibili-summarizer
+bash deploy/import-local-background.sh "/完整路径/视频.flv"</pre>
+    <button class="btn-submit" onclick="loadHistory()">刷新历史记录</button>
+  </div>
+
   <!-- 批量进度 -->
   <div id="batchProgress" class="batch-progress">
     <div class="batch-progress-header">
@@ -451,6 +471,13 @@ https://weixin.qq.com/sph/xxxxxxxx" rows="4"></textarea>
 </div>
 
 <script>
+const APP_BASE = ['/bilibili-summarizer-local', '/bilibili-summarizer']
+  .find(base => location.pathname === base || location.pathname.startsWith(`${base}/`)) || '';
+const apiUrl = path => `${APP_BASE}/api/${path}`;
+if (!APP_BASE) {
+  document.getElementById('localImportHelp').style.display = 'block';
+  document.querySelector('.btn-home').textContent = '↻ 刷新页面';
+}
 const STATUS_MAP = {
   pending:             { label: '排队中',       pct: 5  },
   fetching_info:       { label: '获取信息',      pct: 15 },
@@ -495,7 +522,7 @@ async function submitVideos() {
   hideToast();
 
   try {
-    const resp = await fetch('/bilibili-summarizer/api/submit_batch', {
+    const resp = await fetch(apiUrl('submit_batch'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ urls })
@@ -547,7 +574,7 @@ async function pollBatchStatus() {
   }
 
   try {
-    const resp = await fetch(`/bilibili-summarizer/api/status/batch?ids=${activeIds.join(',')}`);
+    const resp = await fetch(apiUrl(`status/batch?ids=${activeIds.join(',')}`));
     const tasks = await resp.json();
 
     for (const data of tasks) {
@@ -674,7 +701,7 @@ function renderCompletedCards(t) {
             <h3>${esc(d.title)}</h3>
             <div class="meta-item">作者：<span>${esc(d.author || '')}</span></div>
             <div class="meta-item">时长：<span>${d.duration ? fmt(d.duration) : '-'}</span></div>
-            ${d.video_url ? `<a class="video-link" href="${d.video_url}" target="_blank">打开原视频 ↗</a>` : ''}
+            ${d.video_url && d.platform !== 'local' ? `<a class="video-link" href="${d.video_url}" target="_blank">打开原视频 ↗</a>` : ''}
           </div>
         </div>
       </div>
@@ -866,7 +893,7 @@ async function generateProvenance(taskId, btn) {
   btn.disabled = true;
   label.textContent = '生成中...';
   try {
-    const resp = await fetch(`/bilibili-summarizer/api/provenance/${taskId}`, { method: 'POST' });
+    const resp = await fetch(apiUrl(`provenance/${taskId}`), { method: 'POST' });
     const result = await resp.json();
     if (!resp.ok) throw new Error(result.detail || '生成失败');
     if (batchTasks[taskId]) batchTasks[taskId].status = 'summarizing';
@@ -883,7 +910,7 @@ async function generateProvenance(taskId, btn) {
 // ─── 历史记录 ───
 async function loadHistory() {
   try {
-    const resp = await fetch('/bilibili-summarizer/api/list');
+    const resp = await fetch(apiUrl('list'));
     const list = await resp.json();
     const el = document.getElementById('historyList');
 
@@ -910,7 +937,7 @@ async function loadHistory() {
 
 async function loadTask(taskId) {
   try {
-    const resp = await fetch(`/bilibili-summarizer/api/status/${taskId}`);
+    const resp = await fetch(apiUrl(`status/${taskId}`));
     const data = await resp.json();
     // 添加到 batchTasks 并渲染
     batchTasks = {};
@@ -933,7 +960,7 @@ async function loadTask(taskId) {
 
 async function deleteTask(taskId) {
   if (!confirm('确定删除此记录？')) return;
-  await fetch(`/bilibili-summarizer/api/delete/${taskId}`, { method: 'DELETE' });
+  await fetch(apiUrl(`delete/${taskId}`), { method: 'DELETE' });
   loadHistory();
 }
 

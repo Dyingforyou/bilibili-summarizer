@@ -3,7 +3,7 @@ import json
 import re
 
 
-CITATION_RE = re.compile(r"【原文:((?:S\d{4})(?:\s*[,，、]\s*S\d{4})*)】")
+CITATION_RE = re.compile(r"【原文:((?:S\d{4,})(?:\s*[,，、]\s*S\d{4,})*)】")
 
 
 def build_source_chunks(transcript: str, target_chars: int = 360) -> list[dict]:
@@ -68,7 +68,7 @@ def extract_provenance(summary: str, chunks: list[dict]) -> str:
     seen = set()
     for match in CITATION_RE.finditer(summary or ""):
         marker = match.group(0)
-        ids = re.findall(r"S\d{4}", match.group(1))
+        ids = re.findall(r"S\d{4,}", match.group(1))
         valid_ids = [source_id for source_id in ids if source_id in chunk_map]
         if not valid_ids or marker in seen:
             continue
