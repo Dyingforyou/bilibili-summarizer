@@ -1,0 +1,949 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>视频总结助手</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@300;400;500;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --bg: #0d1117;
+  --surface: #161b22;
+  --surface2: #21262d;
+  --border: #30363d;
+  --border-bright: #484f58;
+  --text: #e6edf3;
+  --text-muted: #8b949e;
+  --accent: #58a6ff;
+  --accent-dim: #1f6feb33;
+  --green: #3fb950;
+  --orange: #d29922;
+  --red: #f85149;
+  --pink: #f778ba;
+  --radius: 12px;
+}
+
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+  font-family: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* ─── 顶部导航 ─── */
+.topbar {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 16px 32px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.topbar-logo {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--pink), var(--accent));
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 700;
+}
+.topbar h1 {
+  font-size: 20px; font-weight: 700;
+  background: linear-gradient(135deg, var(--pink), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.topbar-sub {
+  font-size: 13px; color: var(--text-muted); margin-left: auto;
+}
+.btn-home {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.btn-home:hover { color: var(--text); border-color: var(--border-bright); }
+
+/* ─── 容器 ─── */
+.container {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 32px 24px;
+}
+
+/* ─── 输入区 ─── */
+.input-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+  margin-bottom: 28px;
+}
+.input-section h2 {
+  font-size: 16px; font-weight: 500;
+  margin-bottom: 16px;
+  color: var(--text-muted);
+}
+.url-textarea {
+  width: 100%;
+  min-height: 100px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 14px;
+  color: var(--text);
+  font-family: 'JetBrains Mono', monospace;
+  outline: none;
+  transition: border-color 0.2s;
+  resize: vertical;
+  line-height: 1.8;
+}
+.url-textarea:focus { border-color: var(--accent); }
+.url-textarea::placeholder {
+  color: var(--text-muted);
+  font-family: 'Noto Sans SC', sans-serif;
+}
+.input-footer {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 12px;
+}
+.btn-submit {
+  background: linear-gradient(135deg, var(--pink), #c084fc);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 12px 28px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s, transform 0.1s;
+  white-space: nowrap;
+}
+.btn-submit:hover { opacity: 0.9; }
+.btn-submit:active { transform: scale(0.97); }
+.btn-submit:disabled { opacity: 0.5; cursor: not-allowed; }
+.url-count {
+  font-size: 13px; color: var(--text-muted);
+}
+
+/* ─── 状态提示 ─── */
+.toast {
+  display: none;
+  margin-top: 12px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.toast.info  { display:block; background: var(--accent-dim); border:1px solid var(--accent); color:var(--accent); }
+.toast.error { display:block; background: #f8514922; border:1px solid var(--red); color:var(--red); }
+
+/* ─── 批量进度 ─── */
+.batch-progress {
+  display: none;
+  margin-top: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.batch-progress-header {
+  padding: 14px 20px;
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 14px; font-weight: 500;
+}
+.batch-progress-header .count { color: var(--accent); }
+.task-list { list-style: none; }
+.task-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  transition: background 0.2s;
+  cursor: pointer;
+}
+.task-item:last-child { border-bottom: none; }
+.task-item:hover { background: var(--surface2); }
+.task-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%; flex-shrink: 0;
+  transition: background 0.3s;
+}
+.task-dot.pending { background: var(--text-muted); }
+.task-dot.processing { background: var(--orange); animation: pulse 1.5s infinite; }
+.task-dot.completed { background: var(--green); }
+.task-dot.failed { background: var(--red); }
+.task-title { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.task-status { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+.task-url { font-size: 12px; color: var(--text-muted); max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@keyframes pulse {
+  0%,100% { opacity:1; }
+  50% { opacity:0.4; }
+}
+
+/* ─── 结果区 ─── */
+.results { display: flex; flex-direction: column; gap: 24px; margin-top: 24px; }
+
+.task-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.task-group-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 20px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.2s;
+}
+.task-group-header:hover { background: var(--surface2); }
+.task-group-title { flex: 1; font-weight: 600; font-size: 15px; }
+.task-group-badge {
+  font-size: 12px; padding: 2px 8px;
+  border-radius: 12px;
+  white-space: nowrap;
+}
+.task-group-badge.completed { background: #3fb95022; color: var(--green); }
+.task-group-badge.failed { background: #f8514922; color: var(--red); }
+.task-group-badge.processing { background: #d2992222; color: var(--orange); }
+.task-group-toggle {
+  color: var(--text-muted); font-size: 12px;
+  transition: transform 0.2s;
+}
+.task-group-body { display: none; }
+.task-group-body.open { display: block; }
+
+/* ─── 卡片 ─── */
+.card {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.card:last-child { border-bottom: none; }
+.card-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 20px;
+  cursor: pointer;
+  user-select: none;
+}
+.card-header:hover { background: var(--surface2); }
+.card-icon {
+  width: 32px; height: 32px;
+  border-radius: 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px;
+}
+.card-icon.summary { background: #3fb95022; }
+.card-icon.transcript { background: #58a6ff22; }
+.card-icon.info { background: #d2992222; }
+.card-title { font-weight: 600; font-size: 15px; }
+.card-badge {
+  font-size: 12px; color: var(--text-muted);
+  padding: 2px 8px;
+  background: var(--surface2);
+  border-radius: 12px;
+  white-space: nowrap;
+}
+.card-actions {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+.card-actions.visible { display: flex; }
+.card-action-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, background 0.2s;
+  display: inline-flex; align-items: center; gap: 4px;
+  white-space: nowrap;
+}
+.card-action-btn:hover {
+  color: var(--text);
+  border-color: var(--border-bright);
+  background: var(--border);
+}
+.card-action-btn.copied { color: var(--green); border-color: var(--green); }
+.card-action-btn svg {
+  width: 13px; height: 13px;
+  stroke: currentColor; fill: none;
+  stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;
+}
+.card-toggle {
+  color: var(--text-muted);
+  font-size: 12px;
+  transition: transform 0.2s;
+  margin-left: 8px;
+}
+.card-body {
+  padding: 20px;
+  display: none;
+  max-height: 600px;
+  overflow-y: auto;
+}
+.card-body.open { display: block; }
+.card-body pre {
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text);
+  font-family: 'Noto Sans SC', sans-serif;
+}
+.card-body.summary-body pre {
+  font-size: 15px;
+  line-height: 1.9;
+}
+.source-link {
+  display: inline-flex; align-items: center; margin: 0 3px;
+  padding: 1px 7px; border: 1px solid #58a6ff66; border-radius: 10px;
+  background: var(--accent-dim); color: var(--accent); font: 12px/1.6 'Noto Sans SC', sans-serif;
+  cursor: pointer; vertical-align: 1px;
+}
+.source-link:hover { border-color: var(--accent); background: #1f6feb55; }
+.evidence-panel {
+  display: none; margin-top: 16px; padding: 14px 16px;
+  border: 1px solid #58a6ff66; border-radius: 8px; background: #0d111799;
+}
+.evidence-panel.open { display: block; }
+.evidence-title { color: var(--accent); font-size: 13px; font-weight: 600; margin-bottom: 8px; }
+.evidence-item { padding: 8px 0; border-top: 1px solid var(--border); font-size: 14px; white-space: pre-wrap; }
+.evidence-item:first-of-type { border-top: none; }
+.evidence-meta { color: var(--text-muted); font-size: 12px; margin-bottom: 3px; }
+.transcript-highlight { background: #d2992244; border-radius: 3px; }
+
+/* ─── 视频信息 ─── */
+.video-meta {
+  display: flex; gap: 20px; align-items: flex-start;
+}
+.video-cover {
+  width: 200px; border-radius: 8px; flex-shrink: 0;
+}
+.video-details { flex: 1; }
+.video-details h3 { font-size: 18px; margin-bottom: 8px; }
+.video-details .meta-item {
+  font-size: 13px; color: var(--text-muted); margin-bottom: 4px;
+}
+.video-details .meta-item span { color: var(--text); }
+.video-link {
+  display: inline-block; margin-top: 8px;
+  color: var(--accent); font-size: 13px;
+  text-decoration: none;
+}
+.video-link:hover { text-decoration: underline; }
+
+/* ─── 历史列表 ─── */
+.history-section { margin-top: 40px; }
+.history-section h2 {
+  font-size: 18px; font-weight: 600;
+  margin-bottom: 16px;
+  color: var(--text-muted);
+}
+.history-item {
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+.history-item:hover { border-color: var(--border-bright); }
+.history-status {
+  width: 8px; height: 8px;
+  border-radius: 50%; flex-shrink: 0;
+}
+.history-status.completed { background: var(--green); }
+.history-status.processing { background: var(--orange); animation: pulse 1.5s infinite; }
+.history-status.failed { background: var(--red); }
+.history-title { flex: 1; font-size: 14px; }
+.history-date { font-size: 12px; color: var(--text-muted); }
+.history-del {
+  background: none; border: none;
+  color: var(--text-muted); cursor: pointer;
+  font-size: 16px; padding: 4px 8px;
+  border-radius: 4px;
+}
+.history-del:hover { color: var(--red); background: #f8514911; }
+
+/* ─── 空状态 ─── */
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-muted);
+}
+.empty-state .icon { font-size: 48px; margin-bottom: 16px; }
+.empty-state p { font-size: 15px; }
+
+/* ─── 响应式 ─── */
+@media (max-width: 640px) {
+  .topbar { padding: 12px 16px; }
+  .container { padding: 20px 16px; }
+  .input-section { padding: 20px; }
+  .video-meta { flex-direction: column; }
+  .video-cover { width: 100%; }
+  .task-item { flex-wrap: wrap; }
+  .task-url { max-width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<!-- ─── 顶部栏 ─── -->
+<div class="topbar">
+  <div class="topbar-logo">AI</div>
+  <h1>视频总结助手</h1>
+  <span class="topbar-sub">视频 → 字幕/音频 → 总结</span>
+  <a class="btn-home" href="/">↩ 导航页</a>
+</div>
+
+<!-- ─── 主体 ─── -->
+<div class="container">
+
+  <!-- 输入 -->
+  <div class="input-section">
+    <h2>📎 粘贴B站或微信视频号链接（每行一个，支持批量）</h2>
+    <textarea id="urlInput" class="url-textarea" placeholder="https://www.bilibili.com/video/BV...
+https://b23.tv/xxx
+https://weixin.qq.com/sph/xxxxxxxx" rows="4"></textarea>
+    <div class="input-footer">
+      <button id="submitBtn" class="btn-submit" onclick="submitVideos()">批量提交</button>
+      <span id="urlCount" class="url-count"></span>
+    </div>
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <!-- 批量进度 -->
+  <div id="batchProgress" class="batch-progress">
+    <div class="batch-progress-header">
+      <span>📊 处理进度</span>
+      <span class="count" id="batchCount">0/0</span>
+    </div>
+    <ul id="taskList" class="task-list"></ul>
+  </div>
+
+  <!-- 结果区 -->
+  <div id="results" class="results" style="display:none;"></div>
+
+  <!-- 历史 -->
+  <div class="history-section">
+    <h2>📋 历史记录</h2>
+    <div id="historyList"></div>
+  </div>
+</div>
+
+<script>
+const STATUS_MAP = {
+  pending:             { label: '排队中',       pct: 5  },
+  fetching_info:       { label: '获取信息',      pct: 15 },
+  fetching_subtitles:  { label: '获取字幕',      pct: 25 },
+  downloading:         { label: '下载音频',      pct: 30 },
+  splitting:           { label: '切分音频',      pct: 40 },
+  transcribing:        { label: '语音转写中',    pct: 60 },
+  summarizing:         { label: 'AI 总结中',     pct: 85 },
+  completed:           { label: '✓ 完成',        pct: 100 },
+  failed:              { label: '✗ 失败',        pct: 100 },
+};
+
+let pollTimer = null;
+let batchTasks = {};  // { task_id: { url, status, title, data } }
+
+// ─── URL 计数 ───
+document.getElementById('urlInput').addEventListener('input', updateUrlCount);
+
+function updateUrlCount() {
+  const urls = parseUrls();
+  const el = document.getElementById('urlCount');
+  el.textContent = urls.length > 0 ? `${urls.length} 个链接` : '';
+}
+
+function parseUrls() {
+  const text = document.getElementById('urlInput').value;
+  return [...new Set(
+    text.split('\n')
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+  )];
+}
+
+// ─── 批量提交 ───
+async function submitVideos() {
+  const urls = parseUrls();
+  if (!urls.length) { showToast('请输入至少一个视频链接', 'error'); return; }
+
+  const btn = document.getElementById('submitBtn');
+  btn.disabled = true;
+  btn.textContent = '提交中...';
+  hideToast();
+
+  try {
+    const resp = await fetch('/bilibili-summarizer/api/submit_batch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ urls })
+    });
+    const data = await resp.json();
+    if (!resp.ok) { showToast(data.detail || '提交失败', 'error'); return; }
+
+    // 初始化任务跟踪
+    batchTasks = {};
+    for (const t of data.tasks) {
+      if (t.error) {
+        batchTasks[t.url] = { url: t.url, status: 'failed', error: t.error, taskId: null };
+      } else {
+        batchTasks[t.task_id] = { url: t.url, status: t.status, taskId: t.task_id, title: '', data: null };
+      }
+    }
+
+    renderBatchProgress();
+    renderResults();
+
+    // 开始轮询
+    startBatchPolling();
+  } catch (e) {
+    showToast('网络错误: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '批量提交';
+  }
+}
+
+// ─── 批量轮询 ───
+function startBatchPolling() {
+  if (pollTimer) clearInterval(pollTimer);
+  pollTimer = setInterval(pollBatchStatus, 2000);
+  pollBatchStatus();
+}
+
+async function pollBatchStatus() {
+  const activeIds = Object.keys(batchTasks).filter(id => {
+    const t = batchTasks[id];
+    return t.taskId && !['completed', 'failed'].includes(t.status);
+  });
+
+  if (activeIds.length === 0) {
+    clearInterval(pollTimer);
+    pollTimer = null;
+    loadHistory();
+    return;
+  }
+
+  try {
+    const resp = await fetch(`/bilibili-summarizer/api/status/batch?ids=${activeIds.join(',')}`);
+    const tasks = await resp.json();
+
+    for (const data of tasks) {
+      const id = data.task_id;
+      if (batchTasks[id]) {
+        batchTasks[id].status = data.status;
+        batchTasks[id].data = data;
+        if (data.title) batchTasks[id].title = data.title;
+      }
+    }
+
+    renderBatchProgress();
+    renderResults();
+
+    // 检查是否全部完成
+    const allDone = Object.values(batchTasks).every(t =>
+      ['completed', 'failed'].includes(t.status)
+    );
+    if (allDone) {
+      clearInterval(pollTimer);
+      pollTimer = null;
+      loadHistory();
+    }
+  } catch (e) {
+    console.error('Poll error:', e);
+  }
+}
+
+// ─── 渲染进度列表 ───
+function renderBatchProgress() {
+  const container = document.getElementById('batchProgress');
+  const listEl = document.getElementById('taskList');
+  const countEl = document.getElementById('batchCount');
+
+  container.style.display = 'block';
+
+  const all = Object.values(batchTasks);
+  const done = all.filter(t => ['completed', 'failed'].includes(t.status)).length;
+  countEl.textContent = `${done}/${all.length}`;
+
+  listEl.innerHTML = all.map(t => {
+    const st = STATUS_MAP[t.status] || { label: t.status };
+    const title = t.title || t.url;
+    return `
+      <li class="task-item" onclick="scrollToTaskGroup('${t.taskId || ''}')">
+        <div class="task-dot ${t.status}"></div>
+        <span class="task-title">${esc(title)}</span>
+        <span class="task-status">${st.label}</span>
+      </li>`;
+  }).join('');
+}
+
+// ─── 渲染结果 ───
+function renderResults() {
+  const container = document.getElementById('results');
+  const tasks = Object.values(batchTasks);
+  if (!tasks.length) { container.style.display = 'none'; return; }
+  container.style.display = 'flex';
+
+  container.innerHTML = tasks.map(t => {
+    const isDone = t.status === 'completed';
+    const isFailed = t.status === 'failed';
+    const badgeCls = isDone ? 'completed' : isFailed ? 'failed' : 'processing';
+    const badgeText = isDone ? '✓ 完成' : isFailed ? '✗ 失败' : (STATUS_MAP[t.status]?.label || t.status);
+    const title = t.title || t.url;
+    const data = t.data || {};
+    const taskId = t.taskId || '';
+
+    return `
+      <div class="task-group" id="group-${taskId}">
+        <div class="task-group-header" onclick="toggleGroup('body-${taskId}', 'toggle-${taskId}')">
+          <span class="task-group-title">${esc(title)}</span>
+          <span class="task-group-badge ${badgeCls}">${badgeText}</span>
+          <span class="task-group-toggle" id="toggle-${taskId}">▼</span>
+        </div>
+        <div class="task-group-body open" id="body-${taskId}">
+          ${isFailed ? renderFailedCard(t) : isDone ? renderCompletedCards(t) : renderProcessingCards(t)}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function renderFailedCard(t) {
+  const errMsg = t.error || (t.data && t.data.error_message) || '未知错误';
+  return `
+    <div class="card">
+      <div class="card-header">
+        <div class="card-icon" style="background:#f8514922">❌</div>
+        <span class="card-title">处理失败</span>
+      </div>
+      <div class="card-body open">
+        <pre style="color:var(--red)">${esc(errMsg)}</pre>
+      </div>
+    </div>`;
+}
+
+function renderProcessingCards(t) {
+  const st = STATUS_MAP[t.status] || { label: t.status };
+  return `
+    <div class="card">
+      <div class="card-body open">
+        <pre style="color:var(--text-muted)">⏳ ${st.label}...</pre>
+      </div>
+    </div>`;
+}
+
+function renderCompletedCards(t) {
+  const d = t.data;
+  const taskId = t.taskId;
+  const fmt = (s) => { const m=Math.floor(s/60), sec=s%60; return m+'分'+sec+'秒'; };
+
+  // 视频信息
+  const infoHtml = d.title ? `
+    <div class="card">
+      <div class="card-header" onclick="toggleCardEl('info-${taskId}')">
+        <div class="card-icon info">🎬</div>
+        <span class="card-title">视频信息</span>
+        <span class="card-toggle">▶</span>
+      </div>
+      <div class="card-body" id="info-${taskId}">
+        <div class="video-meta">
+          ${d.cover_url ? `<img class="video-cover" src="${d.platform === 'bilibili' ? d.cover_url + '@400w.webp' : d.cover_url}" alt="cover">` : ''}
+          <div class="video-details">
+            <h3>${esc(d.title)}</h3>
+            <div class="meta-item">作者：<span>${esc(d.author || '')}</span></div>
+            <div class="meta-item">时长：<span>${d.duration ? fmt(d.duration) : '-'}</span></div>
+            ${d.video_url ? `<a class="video-link" href="${d.video_url}" target="_blank">打开原视频 ↗</a>` : ''}
+          </div>
+        </div>
+      </div>
+    </div>` : '';
+
+  // 总结
+  const summaryHtml = `
+    <div class="card">
+      <div class="card-header" onclick="toggleCardEl('summary-${taskId}')">
+        <div class="card-icon summary">📝</div>
+        <span class="card-title">AI 总结</span>
+        <span class="card-badge">${d.summary ? '✓ 已生成' : '—'}</span>
+        ${d.summary && !(parseProvenance(d.summary_provenance).citations || []).length ? `
+          <button class="card-action-btn" onclick="event.stopPropagation();generateProvenance('${taskId}', this)" title="使用现有转录稿重新生成带原文引用的总结">
+            🔎 <span>生成溯源</span>
+          </button>` : ''}
+        <span class="card-toggle">▼</span>
+      </div>
+      <div class="card-body summary-body open" id="summary-${taskId}">
+        <pre>${renderSummaryWithSources(d.summary || '暂无总结', d.summary_provenance, taskId)}</pre>
+        <div class="evidence-panel" id="evidence-${taskId}"></div>
+      </div>
+    </div>`;
+
+  // 原文
+  const source = d.transcript_source === 'subtitle' ? '📝 字幕'
+               : d.transcript_source === 'asr' ? '🎙️ 语音识别' : '';
+  const chars = d.transcript ? d.transcript.length : 0;
+  const transcriptHtml = `
+    <div class="card">
+      <div class="card-header" onclick="toggleCardEl('transcript-${taskId}')">
+        <div class="card-icon transcript">📄</div>
+        <span class="card-title">转录原文</span>
+        <span class="card-badge">${source}${source && chars ? ' · ' : ''}${chars ? chars + ' 字' : '—'}</span>
+        <div class="card-actions ${d.transcript ? 'visible' : ''}">
+          <button class="card-action-btn" onclick="event.stopPropagation();copyText('transcript-${taskId}', this)" title="复制">
+            <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+            <span>复制</span>
+          </button>
+          <button class="card-action-btn" onclick="event.stopPropagation();downloadText('transcript-${taskId}', '${esc(d.title || '')}')" title="下载">
+            <svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            <span>下载</span>
+          </button>
+        </div>
+        <span class="card-toggle">▶</span>
+      </div>
+      <div class="card-body" id="transcript-${taskId}">
+        <pre id="transcript-text-${taskId}">${esc(d.transcript || '暂无原文')}</pre>
+      </div>
+    </div>`;
+
+  return infoHtml + summaryHtml + transcriptHtml;
+}
+
+// ─── 工具函数 ───
+function showToast(msg, type) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast ' + type;
+}
+function hideToast() {
+  document.getElementById('toast').className = 'toast';
+}
+
+function toggleGroup(bodyId, toggleId) {
+  const body = document.getElementById(bodyId);
+  const toggle = document.getElementById(toggleId);
+  const isOpen = body.classList.contains('open');
+  if (isOpen) {
+    body.classList.remove('open');
+    if (toggle) toggle.textContent = '▶';
+  } else {
+    body.classList.add('open');
+    if (toggle) toggle.textContent = '▼';
+  }
+}
+
+function toggleCardEl(bodyId) {
+  const body = document.getElementById(bodyId);
+  if (!body) return;
+  const card = body.closest('.card');
+  const toggle = card?.querySelector('.card-toggle');
+  body.classList.toggle('open');
+  if (toggle) {
+    toggle.textContent = body.classList.contains('open') ? '▼' : '▶';
+  }
+}
+
+function scrollToTaskGroup(taskId) {
+  if (!taskId) return;
+  const el = document.getElementById('group-' + taskId);
+  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ─── 复制 ───
+async function copyText(elId, btn) {
+  const pre = document.getElementById(elId)?.querySelector('pre');
+  if (!pre) return;
+  const text = pre.textContent;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch(e) { document.body.removeChild(ta); return; }
+    document.body.removeChild(ta);
+  }
+  const label = btn.querySelector('span');
+  const old = label.textContent;
+  label.textContent = '已复制';
+  btn.classList.add('copied');
+  setTimeout(() => { label.textContent = old; btn.classList.remove('copied'); }, 1500);
+}
+
+// ─── 下载 ───
+function downloadText(elId, title) {
+  const pre = document.getElementById(elId)?.querySelector('pre');
+  if (!pre) return;
+  const text = pre.textContent;
+  let baseName = (title || 'transcript').trim();
+  baseName = baseName.replace(/[\\\/\:\*\?\"\<\>\|]/g, '_').slice(0, 60) || 'transcript';
+  const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `${baseName}.txt`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+
+function parseProvenance(raw) {
+  if (!raw) return { citations: [] };
+  try { return typeof raw === 'string' ? JSON.parse(raw) : raw; }
+  catch { return { citations: [] }; }
+}
+
+function renderSummaryWithSources(summary, rawProvenance, taskId) {
+  let html = esc(summary);
+  const provenance = parseProvenance(rawProvenance);
+  for (const citation of (provenance.citations || [])) {
+    const marker = esc(citation.marker);
+    const ids = citation.sources.map(s => s.id).join('、');
+    const button = `<button class="source-link" onclick="showEvidence('${taskId}','${encodeURIComponent(citation.marker)}')" title="查看对应的真实转录原文">🔎 原文 ${ids}</button>`;
+    html = html.split(marker).join(button);
+  }
+  return html;
+}
+
+function showEvidence(taskId, encodedMarker) {
+  const data = batchTasks[taskId]?.data || {};
+  const marker = decodeURIComponent(encodedMarker);
+  const citation = (parseProvenance(data.summary_provenance).citations || [])
+    .find(item => item.marker === marker);
+  if (!citation) return;
+
+  const panel = document.getElementById(`evidence-${taskId}`);
+  panel.innerHTML = `<div class="evidence-title">这段总结依据的转录原文</div>` + citation.sources.map(source => `
+    <div class="evidence-item">
+      <div class="evidence-meta">${source.id} · 原文字符 ${source.start + 1}–${source.end}</div>
+      <div>${esc(source.text)}</div>
+      <button class="source-link" onclick="locateTranscript('${taskId}',${source.start},${source.end})">在完整原文中定位</button>
+    </div>`).join('');
+  panel.classList.add('open');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function locateTranscript(taskId, start, end) {
+  const data = batchTasks[taskId]?.data || {};
+  const body = document.getElementById(`transcript-${taskId}`);
+  const pre = document.getElementById(`transcript-text-${taskId}`);
+  if (!body || !pre) return;
+  const transcript = data.transcript || '';
+  pre.innerHTML = `${esc(transcript.slice(0, start))}<mark class="transcript-highlight">${esc(transcript.slice(start, end))}</mark>${esc(transcript.slice(end))}`;
+  body.classList.add('open');
+  const mark = pre.querySelector('mark');
+  if (mark) mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+async function generateProvenance(taskId, btn) {
+  const label = btn.querySelector('span');
+  btn.disabled = true;
+  label.textContent = '生成中...';
+  try {
+    const resp = await fetch(`/bilibili-summarizer/api/provenance/${taskId}`, { method: 'POST' });
+    const result = await resp.json();
+    if (!resp.ok) throw new Error(result.detail || '生成失败');
+    if (batchTasks[taskId]) batchTasks[taskId].status = 'summarizing';
+    renderBatchProgress();
+    renderResults();
+    startBatchPolling();
+  } catch (error) {
+    btn.disabled = false;
+    label.textContent = '生成溯源';
+    showToast(error.message, 'error');
+  }
+}
+
+// ─── 历史记录 ───
+async function loadHistory() {
+  try {
+    const resp = await fetch('/bilibili-summarizer/api/list');
+    const list = await resp.json();
+    const el = document.getElementById('historyList');
+
+    if (!list.length) {
+      el.innerHTML = '<div class="empty-state"><div class="icon">📭</div><p>还没有总结过视频</p></div>';
+      return;
+    }
+
+    el.innerHTML = list.map(item => {
+      const stCls = item.status === 'completed' ? 'completed'
+                  : item.status === 'failed' ? 'failed' : 'processing';
+      return `
+        <div class="history-item" onclick="loadTask('${item.task_id}')">
+          <div class="history-status ${stCls}"></div>
+          <span class="history-title">${esc(item.title || item.video_url)}</span>
+          <span class="history-date">${item.created_at || ''}</span>
+          <button class="history-del" onclick="event.stopPropagation();deleteTask('${item.task_id}')" title="删除">×</button>
+        </div>`;
+    }).join('');
+  } catch(e) {
+    console.error('Load history error:', e);
+  }
+}
+
+async function loadTask(taskId) {
+  try {
+    const resp = await fetch(`/bilibili-summarizer/api/status/${taskId}`);
+    const data = await resp.json();
+    // 添加到 batchTasks 并渲染
+    batchTasks = {};
+    batchTasks[taskId] = {
+      url: data.video_url,
+      status: data.status,
+      taskId: taskId,
+      title: data.title || '',
+      data: data,
+    };
+    renderBatchProgress();
+    renderResults();
+    if (!['completed', 'failed'].includes(data.status)) {
+      startBatchPolling();
+    }
+  } catch (e) {
+    console.error('Load task error:', e);
+  }
+}
+
+async function deleteTask(taskId) {
+  if (!confirm('确定删除此记录？')) return;
+  await fetch(`/bilibili-summarizer/api/delete/${taskId}`, { method: 'DELETE' });
+  loadHistory();
+}
+
+// Ctrl+Enter 提交
+document.getElementById('urlInput').addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') submitVideos();
+});
+
+// 初始化
+loadHistory();
+</script>
+</body>
+</html>

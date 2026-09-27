@@ -1,0 +1,20 @@
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# Runtime data and authentication material
+data/
+*.db
+*.sqlite*
+*.mp3
+*cookies*.txt
+yuanbaocookie.txt
+*.log
+
+# Local comparison/output artifacts
+/总结对比.txt

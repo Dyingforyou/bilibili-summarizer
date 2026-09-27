@@ -1,0 +1,14 @@
+[Unit]
+Description=B站总结助手
+After=network.target
+
+[Service]
+Type=simple
+User=admin
+WorkingDirectory=/home/admin/bilibili-summarizer
+ExecStart=/home/admin/bilibili-summarizer/venv/bin/python server.py
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
