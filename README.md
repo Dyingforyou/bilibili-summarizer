@@ -45,7 +45,9 @@ cd /home/admin/bilibili-summarizer
 bash deploy/setup-local.sh
 ```
 
-打开 `http://127.0.0.1:8002/`。服务只监听本机回环地址，不通过云服务器。脚本会创建 `.env`，请在其中填写 `ASR_API_KEY` 和 `LLM_API_KEY`，然后运行 `systemctl --user restart bilibili-summarizer.service`。无须在系统中安装 ffmpeg；本地依赖会提供它。
+打开 `http://127.0.0.1:8002/`。服务只监听本机回环地址；本机访问不经过云服务器。脚本会创建 `.env`，请在其中填写 `ASR_API_KEY` 和 `LLM_API_KEY`，然后运行 `systemctl --user restart bilibili-summarizer.service`。无须在系统中安装 ffmpeg；本地依赖会提供它。
+
+如果要从自己的其他设备访问，参见 [外部设备 SSH 访问说明](deploy/remote-access.md)。ECS 只充当加密隧道中继，视频、数据库和处理程序仍在本机。
 
 如果视频已经是本机文件，在持有文件的机器上运行命令行导入，不要通过网页上传 3GB 文件。要在本地网页的历史记录中查看结果，添加 `--publish-to-history`：
 
