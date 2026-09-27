@@ -1,0 +1,15 @@
+[Unit]
+Description=视频总结助手局域网入口（仅指定 Windows 地址）
+After=network-online.target bilibili-summarizer.service
+Wants=network-online.target bilibili-summarizer.service
+
+[Service]
+Type=simple
+WorkingDirectory=/home/admin/bilibili-summarizer
+ExecStart=/usr/bin/python3 /home/admin/bilibili-summarizer/lan_proxy.py --route-via 192.168.1.1 --allow 192.168.1.105 --allow 192.168.1.108
+Restart=on-failure
+RestartSec=3
+UMask=0077
+
+[Install]
+WantedBy=default.target

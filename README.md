@@ -49,6 +49,16 @@ bash deploy/setup-local.sh
 
 如果要从自己的其他设备访问，参见 [外部设备 SSH 访问说明](deploy/remote-access.md)。ECS 只充当加密隧道中继，视频、数据库和处理程序仍在本机。
 
+同一 `192.168.1.0/24` 局域网内的 Windows 电脑（目前以太网 `192.168.1.105`，WLAN `192.168.1.108`）可直接访问 `http://192.168.1.107:8002/`。局域网代理只接受这两个 Windows 地址；它把请求转给本机的 `127.0.0.1:8002`，所以原有本机入口和 ECS 隧道继续可用。先启动用户服务：
+
+```bash
+install -m 644 deploy/bilibili-summarizer-lan.service ~/.config/systemd/user/bilibili-summarizer-lan.service
+systemctl --user daemon-reload
+systemctl --user enable --now bilibili-summarizer-lan.service
+```
+
+Linux 的 firewalld 还需仅对上述两个 Windows IP 放行端口。在 **Linux 机器的终端**执行 `sudo bash deploy/allow-windows-lan.sh`，自行在终端输入 sudo 密码，不要在聊天里发送密码。之后在 Windows 浏览器打开 `http://192.168.1.107:8002/`。若 Windows 的 DHCP 地址变化，需同步修改代理服务和防火墙白名单。
+
 如果视频已经是本机文件，在持有文件的机器上运行命令行导入，不要通过网页上传 3GB 文件。要在本地网页的历史记录中查看结果，添加 `--publish-to-history`：
 
 ```bash
