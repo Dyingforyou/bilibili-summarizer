@@ -1,19 +1,55 @@
 """Regression checks for local large-file extraction and full-length summaries."""
 import os
 import re
+import asyncio
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+from fastapi import HTTPException
+
+import db
 import llm
 import import_local
 import asr
+import server
 import video
 from provenance import build_source_chunks
 
 
 class LargeVideoTests(unittest.TestCase):
+    def test_web_local_path_creates_history_task_without_storing_absolute_path(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "large video.flv"
+            source.write_bytes(b"test fixture")
+
+            with patch.object(db, "DB_PATH", str(Path(directory) / "summaries.db")), patch.object(
+                server, "LOCAL_FILE_IMPORT_ENABLED", True
+            ), patch.object(server.subprocess, "run") as start_job:
+                db.init_db()
+                result = asyncio.run(server.submit_local_video(server.SubmitLocalRequest(path=str(source))))
+                saved = db.get_task(result["task_id"])
+                self.assertEqual(saved["platform"], "local")
+                self.assertEqual(saved["status"], "pending")
+                self.assertEqual(saved["title"], source.name)
+                self.assertEqual(saved["video_url"], f"local:{result['task_id']}")
+                self.assertNotIn(str(source), str(saved))
+                command = start_job.call_args.args[0]
+                self.assertIn("StartTransientUnit", command)
+                self.assertIn(f"bilibili-local-{result['task_id']}.service", command)
+                self.assertIn(source.as_posix(), command)
+
+    def test_web_local_path_rejects_windows_paths_and_disabled_deployment(self):
+        with self.assertRaises(HTTPException) as wrong_path:
+            server.validate_local_video_path(r"C:\Users\Administrator\video.mp4")
+        self.assertEqual(wrong_path.exception.status_code, 400)
+
+        with patch.object(server, "LOCAL_FILE_IMPORT_ENABLED", False):
+            with self.assertRaises(HTTPException) as disabled:
+                asyncio.run(server.submit_local_video(server.SubmitLocalRequest(path="/tmp/video.mp4")))
+        self.assertEqual(disabled.exception.status_code, 403)
+
     def test_asr_retries_transient_error_for_a_chunk(self):
         with tempfile.TemporaryDirectory() as directory:
             audio = Path(directory) / "chunk.mp3"

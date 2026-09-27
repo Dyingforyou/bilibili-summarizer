@@ -94,17 +94,18 @@ body {
   color: var(--text-muted);
 }
 #localImportHelp p { font-size: 14px; color: var(--text-muted); margin-bottom: 14px; }
-#localImportHelp pre {
+.path-input {
+  width: 100%;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 12px 16px;
-  margin-bottom: 16px;
-  font-size: 13px;
-  line-height: 1.7;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  color: var(--text);
+  font: 14px 'JetBrains Mono', monospace;
+  outline: none;
 }
+.path-input:focus { border-color: var(--accent); }
+.path-input::placeholder { color: var(--text-muted); }
 .url-textarea {
   width: 100%;
   min-height: 100px;
@@ -444,11 +445,15 @@ https://weixin.qq.com/sph/xxxxxxxx" rows="4"></textarea>
   </div>
 
   <div class="input-section" id="localImportHelp" style="display:none;">
-    <h2>本机大视频</h2>
-    <p>视频文件已经在这台机器上时，请在终端运行下面的命令。处理完成后点击“刷新历史记录”；原视频无需经过浏览器上传。</p>
-    <pre>cd /home/admin/bilibili-summarizer
-bash deploy/import-local-background.sh "/完整路径/视频.flv"</pre>
-    <button class="btn-submit" onclick="loadHistory()">刷新历史记录</button>
+    <h2>服务器上的视频文件</h2>
+    <p>输入这台 Linux 服务器中的视频文件完整路径，不是 Windows 的 C:\ 路径。服务器直接读取文件，浏览器不会上传视频。</p>
+    <form id="localPathForm" onsubmit="submitLocalVideo(event)">
+      <input id="localVideoPath" class="path-input" type="text" required autocomplete="off" spellcheck="false" aria-label="服务器视频文件的绝对路径" placeholder="/home/admin/videos/视频.flv">
+      <div class="input-footer">
+        <button id="localSubmitBtn" class="btn-submit" type="submit">提交本地视频</button>
+      </div>
+    </form>
+    <div id="localToast" class="toast"></div>
   </div>
 
   <!-- 批量进度 -->
@@ -550,6 +555,45 @@ async function submitVideos() {
   } finally {
     btn.disabled = false;
     btn.textContent = '批量提交';
+  }
+}
+
+// ─── 提交服务器上的视频文件路径 ───
+async function submitLocalVideo(event) {
+  event.preventDefault();
+  const path = document.getElementById('localVideoPath').value.trim();
+  const btn = document.getElementById('localSubmitBtn');
+  const toast = document.getElementById('localToast');
+  if (!path) return;
+  btn.disabled = true;
+  btn.textContent = '提交中...';
+  toast.className = 'toast';
+
+  try {
+    const resp = await fetch(apiUrl('submit_local'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path })
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || '提交失败');
+
+    batchTasks = {};
+    batchTasks[data.task_id] = {
+      url: data.title, title: data.title, taskId: data.task_id,
+      status: data.status, data: null
+    };
+    renderBatchProgress();
+    renderResults();
+    startBatchPolling();
+    toast.textContent = '已提交，正在服务器上处理。可以关闭此网页，稍后从历史记录查看。';
+    toast.className = 'toast info';
+  } catch (error) {
+    toast.textContent = error.message;
+    toast.className = 'toast error';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '提交本地视频';
   }
 }
 

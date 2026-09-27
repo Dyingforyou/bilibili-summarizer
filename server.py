@@ -1,10 +1,12 @@
 """多平台视频总结助手 - FastAPI 后端服务"""
 import os
+import subprocess
 import sys
 import uuid
 import asyncio
 import traceback
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
@@ -14,7 +16,7 @@ from pydantic import BaseModel
 # 确保能导入本地模块
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-from config import DATA_DIR
+from config import BASE_DIR, DATA_DIR, LOCAL_FILE_IMPORT_ENABLED
 from db import init_db, create_task, update_task, get_task, list_tasks, delete_task
 from video import (extract_bvid, extract_page_number, get_video_info, get_subtitles, download_audio,
                    split_audio, split_local_video, get_audio_duration, cleanup_audio, detect_platform,
@@ -37,6 +39,29 @@ class SubmitRequest(BaseModel):
 
 class SubmitBatchRequest(BaseModel):
     urls: list[str]
+
+class SubmitLocalRequest(BaseModel):
+    path: str
+
+
+LOCAL_VIDEO_EXTENSIONS = {
+    ".mp4", ".flv", ".mkv", ".mov", ".avi", ".m4v", ".webm", ".ts", ".mpg", ".mpeg", ".wmv"
+}
+
+
+def validate_local_video_path(raw_path: str) -> Path:
+    """Accept a readable media file on this server; never store its full path in the database."""
+    value = raw_path.strip()
+    if not value or len(value) > 4096 or not Path(value).is_absolute():
+        raise HTTPException(400, "请输入 Linux 服务器上的视频绝对路径，如 /home/admin/videos/example.flv")
+    video_path = Path(value)
+    if video_path.suffix.lower() not in LOCAL_VIDEO_EXTENSIONS:
+        raise HTTPException(400, "只支持常见视频文件格式，如 MP4、FLV、MKV、MOV")
+    if not video_path.is_file():
+        raise HTTPException(400, "服务器上找不到这个视频文件，请核对完整路径")
+    if not os.access(video_path, os.R_OK):
+        raise HTTPException(403, "服务账号没有读取这个视频文件的权限")
+    return video_path.resolve()
 
 # ────────────── 后台任务 ──────────────
 
@@ -162,6 +187,41 @@ async def submit_video(req: SubmitRequest):
     loop.run_in_executor(None, process_video_task, task_id, url)
 
     return {"task_id": task_id, "status": "pending"}
+
+
+@app.post("/api/submit_local")
+async def submit_local_video(req: SubmitLocalRequest):
+    """Process a file already on the Linux server without sending it through the browser."""
+    if not LOCAL_FILE_IMPORT_ENABLED:
+        raise HTTPException(403, "此部署未启用服务器本地文件导入")
+    video_path = validate_local_video_path(req.path)
+    task_id = uuid.uuid4().hex[:12]
+    create_task(task_id, f"local:{task_id}", platform="local")
+    update_task(task_id, title=video_path.name)
+    # A separate user service keeps a multi-hour video job alive when this web process restarts.
+    executable = f"{BASE_DIR}/venv/bin/python"
+    arguments = [executable, f"{BASE_DIR}/run_local_task.py", task_id, str(video_path)]
+    # Use the user D-Bus manager directly; systemd-run's private socket is unreliable on this host.
+    command = [
+        "busctl", "--user", "call", "org.freedesktop.systemd1",
+        "/org/freedesktop/systemd1", "org.freedesktop.systemd1.Manager",
+        "StartTransientUnit", "ssa(sv)a(sa(sv))",
+        f"bilibili-local-{task_id}.service", "replace", "5",
+        "ExecStart", "a(sasb)", "1", executable, str(len(arguments)), *arguments, "false",
+        "WorkingDirectory", "s", BASE_DIR,
+        "Environment", "as", "1", f"PATH={BASE_DIR}/venv/bin:/usr/local/bin:/usr/bin",
+        "UMask", "u", "63",
+        "CollectMode", "s", "inactive-or-failed", "0",
+    ]
+    try:
+        await asyncio.to_thread(
+            subprocess.run, command, check=True, capture_output=True, text=True, timeout=20
+        )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as exc:
+        update_task(task_id, status="failed", error_message="启动后台处理任务失败")
+        print(f"启动本地视频后台任务失败: {exc}", file=sys.stderr)
+        raise HTTPException(503, "无法启动后台处理任务，请检查 Linux 用户服务状态") from exc
+    return {"task_id": task_id, "status": "pending", "title": video_path.name}
 
 
 @app.get("/api/status/batch")

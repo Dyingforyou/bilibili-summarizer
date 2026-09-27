@@ -42,6 +42,9 @@ LLM_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 # 默认使用低成本模型；可用环境变量按需覆盖。
 LLM_MODEL = os.getenv("LLM_MODEL", "qwen-flash")
 
+# 仅本机部署启用：允许网页提交服务器上的视频绝对路径。
+LOCAL_FILE_IMPORT_ENABLED = os.getenv("LOCAL_FILE_IMPORT_ENABLED", "").lower() in ("1", "true", "yes")
+
 # === 处理参数 ===
 AUDIO_CHUNK_MINUTES = 10  # 每个音频分片时长（分钟）
 MAX_FILE_SIZE_MB = 45     # 留点余量，API限制50MB
